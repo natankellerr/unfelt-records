@@ -192,7 +192,17 @@ window.UF_FOUNDER_NATAN="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBD
   .uf-input:focus { box-shadow:0 0 0 3px rgba(163,22,33,0.08); }
 
   /* ---- mobile perf: fewer wash layers ---- */
-  @media (max-width:760px){ .wb3, .wb5 { display:none; } .wash-blob { filter:blur(70px) !important; } }
+
+  /* ---- menu island: kill the backdrop re-blur while it morphs ----
+     #island animates width/height AND carries backdrop-filter:blur(18px), so the
+     browser re-blurred everything behind it on every frame of the open/close —
+     the jank you feel on phones. Its background is already 90% opaque, so the
+     blur behind it is all but invisible: dropping it on touch/low-end costs
+     nothing visually and removes the whole per-frame backdrop pass. */
+  html.uf-touch #island, html.uf-low #island {
+    backdrop-filter:none !important; -webkit-backdrop-filter:none !important;
+    background:rgba(24,20,17,0.97) !important;
+  }
 
   /* ---- accessibility: visible keyboard focus everywhere ----
      Mouse users never see these; keyboard users can't navigate without them. */
@@ -215,8 +225,6 @@ window.UF_FOUNDER_NATAN="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBD
 
   /* ---- low-end tier: same look, far cheaper to composite ----
      Huge blurs + stacked blend modes are the main cost on weak GPUs. */
-  html.uf-low .wash-blob { filter:blur(44px) !important; }
-  html.uf-low .wb3, html.uf-low .wb5, html.uf-low .wb7 { display:none; }
   html.uf-low #glitch { display:none; }
   html.uf-low .uf-logo-glow, html.uf-low .uf-logo-dark { filter:blur(16px); }
   html.uf-low .uf-logo-echo { display:none; }
@@ -235,23 +243,16 @@ window.UF_FOUNDER_NATAN="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBD
     #trail, #grain, #glitch { display:none !important; }
   }
 
-  /* ---- abstract colour wash + drifting reddish lights across the whole page ---- */
+  /* ---- abstract colour wash: one low-res canvas, stretched ----
+     This used to be 7 DOM layers, each filter:blur(~100px) + mix-blend-mode,
+     with scale() in their keyframes — so every frame the browser re-rasterised
+     and re-blurred seven full-screen layers. That is what stuttered on phones.
+     Now: one canvas rendered at ~30% resolution and stretched by CSS. The
+     upscale IS the blur (free, done by the compositor), so no filter at all,
+     and it is a single blended layer instead of seven. */
   #wash { position:fixed; inset:-20% 0; z-index:0; pointer-events:none; overflow:hidden; will-change:transform; }
-  .wash-blob { position:absolute; border-radius:50%; mix-blend-mode:multiply; will-change:transform,opacity; }
-  .wb1 { width:60vw; height:60vw; left:-12vw; top:-6vh;  filter:blur(100px); opacity:.58; background:radial-gradient(circle,rgba(163,22,33,0.62),transparent 66%);  animation:uf-drift1 31s ease-in-out infinite; }
-  .wb2 { width:52vw; height:52vw; right:-10vw; top:10vh; filter:blur(92px);  opacity:.52; background:radial-gradient(circle,rgba(166,60,79,0.60),transparent 66%);  animation:uf-drift2 38s ease-in-out infinite; }
-  .wb3 { width:56vw; height:56vw; left:2vw;  bottom:-16vh; filter:blur(110px); opacity:.34; background:radial-gradient(circle,rgba(86,89,76,0.50),transparent 70%);   animation:uf-drift3 34s ease-in-out infinite; }
-  .wb4 { width:44vw; height:44vw; right:6vw; bottom:0;   filter:blur(84px);  opacity:.52; background:radial-gradient(circle,rgba(214,67,42,0.55),transparent 68%);  animation:uf-drift1 44s ease-in-out infinite reverse; }
-  .wb5 { width:48vw; height:48vw; left:24vw; top:40vh;   filter:blur(120px); opacity:.30; background:radial-gradient(circle,rgba(139,140,129,0.45),transparent 72%); animation:uf-drift2 51s ease-in-out infinite; }
-  /* smaller reddish "lights" wandering more freely */
-  .wb6 { width:28vw; height:28vw; left:58vw; top:6vh;    filter:blur(64px);  opacity:.46; background:radial-gradient(circle,rgba(214,67,42,0.58),transparent 62%);  animation:uf-drift4 26s ease-in-out infinite; }
-  .wb7 { width:24vw; height:24vw; left:8vw;  top:58vh;   filter:blur(58px);  opacity:.44; background:radial-gradient(circle,rgba(163,22,33,0.58),transparent 62%);  animation:uf-drift5 29s ease-in-out infinite; }
-  @keyframes uf-drift1 { 0%,100%{transform:translate(0,0) scale(1);} 33%{transform:translate(9vw,7vh) scale(1.14);} 66%{transform:translate(-6vw,11vh) scale(0.92);} }
-  @keyframes uf-drift2 { 0%,100%{transform:translate(0,0) scale(1);} 33%{transform:translate(-10vw,9vh) scale(1.1);} 66%{transform:translate(7vw,-7vh) scale(1.18);} }
-  @keyframes uf-drift3 { 0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(8vw,-10vh) scale(1.12);} }
-  @keyframes uf-drift4 { 0%,100%{transform:translate(0,0) scale(1);} 25%{transform:translate(-14vw,12vh) scale(1.2);} 55%{transform:translate(10vw,26vh) scale(0.9);} 80%{transform:translate(-8vw,8vh) scale(1.1);} }
-  @keyframes uf-drift5 { 0%,100%{transform:translate(0,0) scale(1);} 30%{transform:translate(16vw,-14vh) scale(1.16);} 60%{transform:translate(6vw,-28vh) scale(0.94);} 85%{transform:translate(-10vw,-6vh) scale(1.08);} }
-  @media (prefers-reduced-motion:reduce){ .wash-blob{animation:none !important;} }
+  #washCanvas { position:absolute; inset:0; width:100%; height:100%; mix-blend-mode:multiply; }
+  html.uf-invert #washCanvas { mix-blend-mode:screen; }
 
   /* mouse particle trail */
   #trail { position:fixed; inset:0; z-index:945; pointer-events:none; mix-blend-mode:multiply; }
@@ -283,9 +284,6 @@ window.UF_FOUNDER_NATAN="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBD
   #heroCanvas, .uf-hero-vig { -webkit-mask-image:linear-gradient(to bottom, #000 76%, transparent 100%); mask-image:linear-gradient(to bottom, #000 76%, transparent 100%); }
   .uf-hero-vig { transition:opacity var(--bkd) var(--bke); }
   html.uf-invert .uf-hero-vig { opacity:0; }
-  .wash-blob { transition:opacity var(--bkd) var(--bke); }
-  html.uf-invert .wash-blob { mix-blend-mode:screen; opacity:.2 !important;
-    background:radial-gradient(circle, rgba(249,236,229,0.5), transparent 66%) !important; }
   html.uf-invert #trail { mix-blend-mode:screen; }
   html.uf-invert #grain { opacity:.22; mix-blend-mode:screen; }
 
@@ -307,7 +305,7 @@ window.UF_FOUNDER_NATAN="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBD
   /* fast entry — the slow, staggered timing above only governs the way back */
   html.uf-invert body, html.uf-invert #home p, html.uf-invert #home span:not(.uf-logo-glow):not(.uf-logo-dark),
   html.uf-invert section, html.uf-invert footer,
-  html.uf-invert .uf-hero-vig, html.uf-invert .wash-blob,
+  html.uf-invert .uf-hero-vig,
   html.uf-invert #menuPill span span,
   html.uf-invert .uf-formcard { transition-duration:850ms; transition-timing-function:ease; transition-delay:0ms; }
   html.uf-invert :where(#catalog,#about,#contact,footer) :where(p,span,div,label,a) { transition-duration:850ms; transition-timing-function:ease; transition-delay:0ms; }
@@ -320,15 +318,7 @@ window.UF_FOUNDER_NATAN="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBD
 <a class="uf-skip" href="#catalog">Skip to content</a>
 
 <!-- ABSTRACT COLOUR WASH (behind everything) -->
-<div id="wash" aria-hidden="true">
-  <span class="wash-blob wb1"></span>
-  <span class="wash-blob wb2"></span>
-  <span class="wash-blob wb3"></span>
-  <span class="wash-blob wb4"></span>
-  <span class="wash-blob wb5"></span>
-  <span class="wash-blob wb6"></span>
-  <span class="wash-blob wb7"></span>
-</div>
+<div id="wash" aria-hidden="true"><canvas id="washCanvas"></canvas></div>
 <!-- MOUSE PARTICLE TRAIL -->
 <canvas id="trail" aria-hidden="true"></canvas>
 
@@ -874,6 +864,102 @@ window.UF_FOUNDER_NATAN="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBD
     kickWash();
   }
 
+  /* ---------- abstract colour wash (low-res canvas, stretched) ----------
+     Formless smears rather than circles: each blob is an ellipse drawn through
+     a rotated/scaled transform, so nothing reads as a defined shape. Rendered
+     into a small buffer (~30% of viewport) and stretched by CSS — the upscale
+     supplies the softness for free, which is why there is no blur filter here. */
+  var WASH = [
+    // c: palette rgb · a: peak alpha · r: radius (vw) · e: elongation · rot: tilt
+    { x:0.10, y:0.06, c:'163,22,33',    a:0.34, r:0.62, e:1.45, rot:-0.4, sx:0.055, sy:0.042, p:0.0 },
+    { x:0.88, y:0.16, c:'166,60,79',    a:0.31, r:0.54, e:1.30, rot:0.7,  sx:0.041, sy:0.058, p:1.2 },
+    { x:0.20, y:0.92, c:'86,89,76',     a:0.20, r:0.58, e:1.55, rot:0.3,  sx:0.048, sy:0.036, p:2.4 },
+    { x:0.80, y:0.86, c:'214,67,42',    a:0.30, r:0.46, e:1.25, rot:-0.9, sx:0.036, sy:0.051, p:3.1 },
+    { x:0.46, y:0.52, c:'139,140,129',  a:0.17, r:0.50, e:1.70, rot:0.15, sx:0.030, sy:0.028, p:4.0 },
+    { x:0.62, y:0.10, c:'214,67,42',    a:0.26, r:0.30, e:1.60, rot:1.1,  sx:0.070, sy:0.060, p:5.2 },
+    { x:0.08, y:0.60, c:'163,22,33',    a:0.25, r:0.26, e:1.40, rot:-0.6, sx:0.062, sy:0.075, p:6.1 },
+    // extra fill: more colour across the page, still formless
+    { x:0.35, y:0.28, c:'166,60,79',    a:0.20, r:0.40, e:1.80, rot:0.9,  sx:0.033, sy:0.047, p:7.3 },
+    { x:0.72, y:0.46, c:'163,22,33',    a:0.19, r:0.44, e:1.35, rot:-1.2, sx:0.045, sy:0.031, p:8.0 },
+    { x:0.28, y:0.74, c:'214,67,42',    a:0.18, r:0.34, e:1.90, rot:0.5,  sx:0.052, sy:0.044, p:9.4 },
+    { x:0.94, y:0.66, c:'86,89,76',     a:0.15, r:0.38, e:1.50, rot:-0.2, sx:0.038, sy:0.055, p:10.6 }
+  ];
+  var washCv = null, washCtx = null, washW = 0, washH = 0, washRafId = null, washLast = 0;
+
+  function startWash() {
+    washCv = $('#washCanvas');
+    if (!washCv) return;
+    washCtx = washCv.getContext('2d');
+    // ~30% resolution (25% on weak hardware). The CSS stretch hides it entirely,
+    // because everything drawn here is a soft gradient with no edges to alias.
+    var SCALE = PERF.low ? 0.22 : 0.30;
+    var host = $('#wash');
+    function resize() {
+      // fall back to the viewport: at init the host can still measure 0, which
+      // would otherwise freeze the buffer at 1x1 for the life of the page
+      var W = host.clientWidth || window.innerWidth;
+      var H = host.clientHeight || Math.round(window.innerHeight * 1.4);
+      var nw = Math.max(1, Math.round(W * SCALE));
+      var nh = Math.max(1, Math.round(H * SCALE));
+      if (nw === washW && nh === washH) return;
+      washW = nw; washH = nh;
+      washCv.width = washW; washCv.height = washH;
+    }
+    resize();
+    // ResizeObserver fires once layout is real (and on phone rotation)
+    try { new ResizeObserver(resize).observe(host); }
+    catch (e) { window.addEventListener('resize', resize, { passive: true }); }
+
+    var FPS = PERF.low ? 20 : 30;          // the drift is glacial; 60fps buys nothing
+    var interval = 1000 / FPS;
+
+    function drawWash(now) {
+      var ctx = washCtx, w = washW, h = washH;
+      ctx.clearRect(0, 0, w, h);
+      var t = now * 0.00006;                                  // very slow
+      var inv = document.documentElement.classList.contains('uf-invert');
+      var base = Math.min(w, h);
+
+      for (var i = 0; i < WASH.length; i++) {
+        var b = WASH[i];
+        // organic wander: two out-of-phase sines per axis so the path never
+        // repeats visibly and never traces a recognisable shape
+        var cx = (b.x + Math.sin(t * 6 * b.sx + b.p) * 0.09 + Math.cos(t * 3.4 * b.sy + b.p * 0.7) * 0.05) * w;
+        var cy = (b.y + Math.cos(t * 5 * b.sy + b.p) * 0.08 + Math.sin(t * 2.7 * b.sx + b.p * 1.3) * 0.05) * h;
+        var rad = b.r * base * (0.88 + Math.sin(t * 4 * b.sx + b.p) * 0.16);
+        var col = inv ? '249,236,229' : b.c;
+        var alpha = inv ? b.a * 0.55 : b.a;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(b.rot + Math.sin(t * 2 * b.sy + b.p) * 0.5);
+        ctx.scale(b.e, 1 / b.e);                              // ellipse => smear, not a disc
+        var g = ctx.createRadialGradient(0, 0, 0, 0, 0, rad);
+        g.addColorStop(0,    'rgba(' + col + ',' + alpha.toFixed(3) + ')');
+        g.addColorStop(0.42, 'rgba(' + col + ',' + (alpha * 0.45).toFixed(3) + ')');
+        g.addColorStop(0.72, 'rgba(' + col + ',' + (alpha * 0.13).toFixed(3) + ')');
+        g.addColorStop(1,    'rgba(' + col + ',0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, rad, 0, 6.283);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+    function paint(now) {
+      washRafId = (!document.hidden) ? requestAnimationFrame(paint) : null;
+      if (now - washLast < interval) return;   // hold to FPS; the drift is glacial
+      washLast = now;
+      drawWash(now);
+    }
+    function kick() { if (washRafId == null && !document.hidden) washRafId = requestAnimationFrame(paint); }
+    document.addEventListener('visibilitychange', kick);
+    // paint one frame up front so the wash is never blank — covers loading in a
+    // background tab, and any frame the throttle would otherwise skip early on
+    drawWash(performance.now());
+    kick();
+  }
+
   /* ---------- granular / glitch mouse trail (disintegrated, with glow) ---------- */
   var TRAIL_COLORS = ['163,22,33', '166,60,79', '214,67,42', '130,26,32'];
   var trailParticles = [];
@@ -1113,6 +1199,7 @@ window.UF_FOUNDER_NATAN="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBD
 
     runLoader();
     startCanvas();
+    startWash();
     startTrail();
     bindMouse();
     bindScroll();
